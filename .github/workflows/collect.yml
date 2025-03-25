@@ -104,6 +104,13 @@ jobs:
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz.txt
           if-no-files-found: error
 
+      - name: Upload Helmchart
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.helm
+          path: ${{ vars.COLLECTOR }}/helmchart/*
+          if-no-files-found: error
+  
   Code:
     needs: [Date]
     runs-on: ubuntu-24.04
@@ -303,7 +310,7 @@ jobs:
         run: ls -Alh ${{ vars.COLLECTOR }}-*.*
 
       - name: Send Files to Sharepoint
-        uses: amentumcms/sharepoint-file-upload-action@pappasjfed-patch-1
+        uses: amentumcms/sharepoint-file-upload-action@main
         with:
           file_path: "${{ vars.COLLECTOR }}-*.*"
           host_name: ${{ secrets.SHAREPOINT_HOST }}
