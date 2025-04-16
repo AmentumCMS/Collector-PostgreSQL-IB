@@ -10,3 +10,6 @@
 [submodule "postgresql15-alpine-source"]
 	path = postgresql15-ib-alpine-source
 	url = https://repo1.dso.mil/dsop/opensource/postgres/postgresql-15/postgresql15-alpine.git
+[submodule "bitnami-pgpool-ib-source"]
+	path = bitnami-pgpool-ib-source
+	url = https://repo1.dso.mil/dsop/bitnami/pgpool.git
