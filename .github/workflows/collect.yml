@@ -113,18 +113,6 @@ jobs:
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
 
-      - name: Update Submodules if needed
-        shell: bash
-        run: |
-          git submodule update --init --recursive --remote
-          set +e
-          git commit -am "Update Submodules"
-          if [ $? -eq 1 ];then
-            echo "No push required"
-          else
-            git push
-          fi
-
       - name: Bundle Repo1 code base for ${{ vars.COLLECTOR }}
         run: |
           git bundle create --progress ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle --all
