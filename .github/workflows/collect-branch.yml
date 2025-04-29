@@ -37,7 +37,7 @@ jobs:
 
       - name: ${{ vars.REGISTRY }} Login
         run: |
-          skopeo login '${{ vars.REGISTRY }}' \
+          skopeo login ${{ vars.REGISTRY }} \
             -u '${{ secrets.REDHAT_USER }}' \
             -p '${{ secrets.REDHAT_PASS }}'
 
@@ -82,7 +82,7 @@ jobs:
         run: |
           sha256sum -b ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz | tee \
             ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz.sha
- 
+
       - name: List files 
         run: ls -Alht ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
 
