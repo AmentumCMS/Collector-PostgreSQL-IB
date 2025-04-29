@@ -35,11 +35,11 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y skopeo pigz
 
-      - name: DSO Login
+      - name: ${{ vars.REGISTRY }} Login
         run: |
-          skopeo login registry1.dso.mil \
-            -u ${{ secrets.REGISTRY_USER }} \
-            -p ${{ secrets.REGISTRY_TOKEN }}
+          skopeo login '${{ vars.REGISTRY }}' \
+            -u '${{ secrets.REDHAT_USER }}' \
+            -p '${{ secrets.REDHAT_PASS }}'
 
       - name: Run Skopeo Sync
         run: |
@@ -140,10 +140,10 @@ jobs:
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle*
           if-no-files-found: error
 
-      - name: TARCHIVE Repo1 code base for ${{ vars.COLLECTOR }}
+      - name: TARchive code base for ${{ vars.COLLECTOR }}
         run: |
           tar -cvC .. \
-            -f ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz Collector-* \
+            -f ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz $(basename ${{ github.WORKSPACE }}) \
             | tee ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz.txt
 
       - name: Generate TARchive Hash
