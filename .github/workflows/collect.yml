@@ -37,9 +37,9 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y skopeo pigz
 
-      - name: DSO Login
+      - name: ${{ vars.REGISTRY }} Login
         run: |
-          skopeo login registry1.dso.mil \
+          skopeo login ${{ vars.REGISTRY }}  \
             -u ${{ secrets.REGISTRY_USER }} \
             -p ${{ secrets.REGISTRY_TOKEN }}
 
@@ -84,7 +84,7 @@ jobs:
         run: |
           sha256sum -b ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz | tee \
             ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz.sha
- 
+
       - name: List files 
         run: ls -Alht ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
 
@@ -130,10 +130,10 @@ jobs:
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.bundle*
           if-no-files-found: error
 
-      - name: TARCHIVE Repo1 code base for ${{ vars.COLLECTOR }}
+      - name: TARchive code base for ${{ vars.COLLECTOR }}
         run: |
           tar -cvC .. \
-            -f ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz Collector-* \
+            -f ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz $(basename ${{ github.WORKSPACE }}) \
             | tee ${{ vars.COLLECTOR }}-code-${{ needs.Date.outputs.Date }}.tgz.txt
 
       - name: Generate TARchive Hash
@@ -173,6 +173,9 @@ jobs:
         with:
           merge-multiple: true
           path: ${{ vars.COLLECTOR }}
+
+      # Download Binaries if needed
+      # Binaries Downloaded
 
       - name: Copy README to ${{ vars.COLLECTOR }} ISO
         run: cp -v README.md ${{ vars.COLLECTOR }}/
