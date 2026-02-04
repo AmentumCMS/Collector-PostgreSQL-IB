@@ -145,7 +145,7 @@ jobs:
           name: evidence-anchore-report
           path: anchore-report.txt
 
-  SecurityScan:
+  TrivyScan:
     needs: [Date, Skopeo, Code]
     runs-on: ubuntu-24.04
     permissions:
@@ -294,7 +294,7 @@ jobs:
 
   MakeISO:
     runs-on: ubuntu-24.04
-    needs: [Date, Code, Skopeo, SecurityScan, AnchoreScan]
+    needs: [Date, Code, Skopeo, TrivyScan, AnchoreScan]
     env:
       GH_TOKEN: ${{ github.token }}
     permissions:
