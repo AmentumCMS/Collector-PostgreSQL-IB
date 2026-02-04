@@ -92,7 +92,8 @@ jobs:
           name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
           if-no-files-found: error
-AnchoreScan:
+          
+  AnchoreScan:
     needs: [Date, Skopeo]
     runs-on: ubuntu-24.04
     permissions:
