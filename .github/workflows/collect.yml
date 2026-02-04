@@ -95,6 +95,56 @@ jobs:
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
           if-no-files-found: error
 
+  SecurityScan:
+    needs: [Date, Skopeo, Code]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Download Skopeo Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          path: .
+
+      - name: Extract for scanning
+        run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+
+      # 1. Scan Helm Charts & Configs
+      - name: Run Trivy config scan (IaC)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          hide-progress: false
+          exit-code: '1' # Fails the build if issues are found
+          severity: 'CRITICAL,HIGH'
+
+      # 2. Scan the synced container image files
+      - name: Run Trivy FS scan on synced images
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '${{ vars.COLLECTOR }}'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # 3. (Optional) Upload results to GitHub Security Tab
+      - name: Generate SARIF report for GitHub
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
   Code:
     needs: [Date]
     runs-on: ubuntu-24.04
