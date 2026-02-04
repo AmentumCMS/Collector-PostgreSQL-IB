@@ -93,7 +93,7 @@ jobs:
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
           if-no-files-found: error
           
-AnchoreScan:
+  AnchoreScan:
     needs: [Date, Skopeo]
     runs-on: ubuntu-24.04
     permissions:
@@ -148,7 +148,7 @@ AnchoreScan:
           path: anchore-report.txt
           
           
-SecurityScan:
+  SecurityScan:
     needs: [Date, Skopeo, Code]
     runs-on: ubuntu-24.04
     permissions:
