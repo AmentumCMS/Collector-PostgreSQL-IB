@@ -96,6 +96,9 @@ jobs:
   SecurityScan:
     needs: [Date, Skopeo, Code]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read       # Required to check out code
+      security-events: write # Required to upload SARIF results    
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -140,7 +143,7 @@ jobs:
       
       - name: Upload SARIF to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
           
