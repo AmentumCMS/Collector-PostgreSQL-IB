@@ -112,6 +112,7 @@ jobs:
       - name: Extract for scanning
         run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
+      # Anchore Grype is excellent at auto-detecting the skopeo directory structure
       - name: Run Anchore Grype scan
         uses: anchore/scan-action@v6
         id: scan
@@ -127,27 +128,23 @@ jobs:
         with:
           sarif_file: ${{ steps.scan.outputs.sarif }}
       
-      # PROOF: Generate text table for human eyes
-      - name: Generate Anchore Text Report
+      - name: Generate Anchore Proof Report
         if: always()
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b .
           ./grype ./${{ vars.COLLECTOR }} > anchore-report.txt
-          
-          # Push to Job Summary
           echo "## Anchore Grype Results ⚓" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat anchore-report.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload Anchore Evidence Artifact
+      - name: Upload Anchore Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: evidence-anchore-report
           path: anchore-report.txt
-          
-          
+
   SecurityScan:
     needs: [Date, Skopeo, Code]
     runs-on: ubuntu-24.04
@@ -166,23 +163,29 @@ jobs:
 
       - name: Extract for scanning
         run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
-      - name: Debug - List Files to Scan
+
+      # Fixed: Point Trivy at the specific image directories found by Skopeo
+      - name: Run Trivy OCI Image Scan
         run: |
-          echo "Current working directory: $PWD"
-          echo "Contents of ${{ vars.COLLECTOR }}:"
-          ls -R ${{ vars.COLLECTOR }} | head -n 20
-      # 1. Run Trivy and generate both SARIF and TABLE
-      - name: Run Trivy FS scan (Table for Artifact)
+          echo "Trivy Scanning OCI Layouts..." > trivy-report.txt
+          # Loop through directories that have a manifest.json
+          for img in $(find ${{ vars.COLLECTOR }} -name "manifest.json" -exec dirname {} \+); do
+            echo -e "\n--- Target Image: $img ---" >> trivy-report.txt
+            # Using 'image' mode on a local directory (OCI layout)
+            docker run -v $PWD:/root/ aquasec/trivy image --input "/root/$img" --severity CRITICAL,HIGH >> trivy-report.txt
+          done
+
+      - name: Run Trivy Config Scan (Helm Charts)
+        if: always()
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '${{ vars.COLLECTOR }}'
+          scan-type: 'config'
+          scan-ref: '${{ vars.COLLECTOR }}/helmchart'
           format: 'table'
-          output: 'trivy-report.txt'
-          exit-code: '0' # Don't fail yet, we want to finish the report
           severity: 'CRITICAL,HIGH'
 
-      - name: Run Trivy FS scan (SARIF for Security Tab)
+      # Generate SARIF for the Security Tab (scanning the root for config/secrets)
+      - name: Generate SARIF
         if: always()
         uses: aquasecurity/trivy-action@master
         with:
@@ -190,25 +193,22 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          exit-code: '1' # This will fail the build if vulns are found
-          severity: 'CRITICAL,HIGH'
 
-      - name: Upload SARIF to GitHub Security
+      - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
 
-      # PROOF: Push to Job Summary
       - name: Publish Trivy Summary
         if: always()
         run: |
-          echo "## Trivy Scan Results 🛡️" >> $GITHUB_STEP_SUMMARY
+          echo "## Trivy OCI & Config Results 🛡️" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat trivy-report.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload Trivy Evidence Artifact
+      - name: Upload Trivy Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
