@@ -214,7 +214,7 @@ jobs:
 
   MakeISO:
     runs-on: ubuntu-24.04
-    needs: [Date, Code, Skopeo]
+    needs: [Date, Code, Skopeo, SecurityScan]
     env:
       GH_TOKEN: ${{ github.token }}
     permissions:
