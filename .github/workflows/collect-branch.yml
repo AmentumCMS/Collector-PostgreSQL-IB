@@ -165,15 +165,23 @@ jobs:
         run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
 
       # Fixed: Point Trivy at the specific image directories found by Skopeo
-      - name: Run Trivy OCI Image Scan
+      - name: Run Trivy FS scan on synced images
         run: |
-          echo "Trivy Scanning OCI Layouts..." > trivy-report.txt
-          # Loop through directories that have a manifest.json
-          for img in $(find ${{ vars.COLLECTOR }} -name "manifest.json" -exec dirname {} \+); do
-            echo -e "\n--- Target Image: $img ---" >> trivy-report.txt
-            # Using 'image' mode on a local directory (OCI layout)
-            docker run -v $PWD:/root/ aquasec/trivy image --input "/root/$img" --severity CRITICAL,HIGH >> trivy-report.txt
+          echo "## Trivy Detailed Findings 🛡️" > trivy-report.txt
+          
+          # We scan each directory found by skopeo as a filesystem.
+          # This allows Trivy to find the 'var/lib/dpkg' or 'apk/db' inside the blobs.
+          for img in $(find ${{ vars.COLLECTOR }} -maxdepth 1 -mindepth 1 -type d ! -name "helmchart"); do
+            echo -e "\n### Scanning Image: $img" >> trivy-report.txt
+            # Using the 'fs' scanner on the directory is the most reliable for skopeo-dir format
+            trivy fs --severity CRITICAL,HIGH --format table "$img" >> trivy-report.txt
           done
+
+          # Push to the GitHub Summary page
+          echo "## Trivy OCI & Config Results 🛡️" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat trivy-report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Run Trivy Config Scan (Helm Charts)
         if: always()
