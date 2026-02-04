@@ -166,13 +166,17 @@ jobs:
 
       - name: Extract for scanning
         run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
-
+      - name: Debug - List Files to Scan
+        run: |
+          echo "Current working directory: $PWD"
+          echo "Contents of ${{ vars.COLLECTOR }}:"
+          ls -R ${{ vars.COLLECTOR }} | head -n 20
       # 1. Run Trivy and generate both SARIF and TABLE
       - name: Run Trivy FS scan (Table for Artifact)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: '.'
+          scan-ref: '${{ vars.COLLECTOR }}'
           format: 'table'
           output: 'trivy-report.txt'
           exit-code: '0' # Don't fail yet, we want to finish the report
