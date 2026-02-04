@@ -92,7 +92,40 @@ jobs:
           name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
           if-no-files-found: error
+AnchoreScan:
+    needs: [Date, Skopeo]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
 
+      - name: Download Skopeo Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          path: .
+
+      - name: Extract for scanning
+        run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+
+      - name: Run Anchore Grype scan
+        uses: anchore/scan-action@v6
+        id: scan
+        with:
+          path: "${{ vars.COLLECTOR }}"
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+
+      - name: Upload Anchore Scan Report
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          
   SecurityScan:
     needs: [Date, Skopeo, Code]
     runs-on: ubuntu-24.04
@@ -217,7 +250,7 @@ jobs:
 
   MakeISO:
     runs-on: ubuntu-24.04
-    needs: [Date, Code, Skopeo, SecurityScan]
+    needs: [Date, Code, Skopeo, SecurityScan, AnchoreScan]
     env:
       GH_TOKEN: ${{ github.token }}
     permissions:
