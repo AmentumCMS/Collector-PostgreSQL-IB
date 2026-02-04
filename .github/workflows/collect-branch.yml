@@ -163,7 +163,13 @@ jobs:
 
       - name: Extract for scanning
         run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
-
+      - name: Install Trivy
+        run: |
+          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+          wget -qO - https://aquasecurity.github.io/trivy-repo/dabest.gpg | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy -y
       # Fixed: Point Trivy at the specific image directories found by Skopeo
       - name: Run Trivy FS scan on synced images
         run: |
