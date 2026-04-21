@@ -1,0 +1,68 @@
+name: Update Container Versions
+on:
+  workflow_dispatch:
+
+jobs:
+  update-yaml:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo jq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Update YAML tags
+        env:
+          YAML_FILE: "${{ vars.COLLECTOR }}.yml"
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY: "registry1.dso.mil"
+        run: |
+          # 1. Login
+          skopeo login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
+
+          # 2. Get the list of image keys from the specific YAML path
+          # This gets "ironbank/opensource/postgres/postgresql", etc.
+          IMAGES=$(yq eval '.["registry1.dso.mil"]["images-by-tag-regex"] | keys | .[]' "$YAML_FILE")
+
+          for IMAGE in $IMAGES; do
+            echo "🔍 Checking tags for $REGISTRY/$IMAGE..."
+            
+            # 3. Fetch tags from Iron Bank
+            # Iron Bank tags often look like 16.6.0 or 16.6.0-20240101
+            # We sort to find the highest semantic version
+            LATEST_TAG=$(skopeo list-tags "docker://$REGISTRY/$IMAGE" | jq -r '.Tags[]' | \
+              grep -E '^[0-9.]+$' | sort -V | tail -n 1)
+
+            if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
+              echo "✅ Found latest: $LATEST_TAG"
+              
+              # 4. Update the regex value in the YAML
+              # We format the tag back into the regex style: ^VERSION$
+              NEW_VALUE="^${LATEST_TAG}$"
+              
+              yq eval ".[\"registry1.dso.mil\"][\"images-by-tag-regex\"].\"$IMAGE\" = \"$NEW_VALUE\"" -i "$YAML_FILE"
+            else
+              echo "⚠️ No numeric tags found for $IMAGE"
+            fi
+          done
+
+      - name: Commit and Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ vars.COLLECTOR }}.yml"
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update container versions in ${{ vars.COLLECTOR }}.yml"
+            git push
+          fi
