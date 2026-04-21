@@ -27,39 +27,32 @@ jobs:
           YAML_FILE: "${{ vars.COLLECTOR }}.yml"
           REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-          REGISTRY: ${{ vars.REGISTRY }}
+          REGISTRY: "registry1.dso.mil"
         run: |
           # 1. Login
           skopeo login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
 
-          # 2. Get images using yq filter to ignore non-image keys
-          # This filter looks for keys that DON'T contain 'regex'
-          IMAGES=$(yq eval '.[] | keys | .[] | select(. == "*regex*" | not)' "$YAML_FILE")
-
-          if [ -z "$IMAGES" ]; then
-            echo "No images found in $YAML_FILE"
-            exit 0
-          fi
+          # 2. Get the list of image keys from the specific YAML path
+          # This gets "ironbank/opensource/postgres/postgresql", etc.
+          IMAGES=$(yq eval '.["registry1.dso.mil"]["images-by-tag-regex"] | keys | .[]' "$YAML_FILE")
 
           for IMAGE in $IMAGES; do
-            # 3. Handle registry prefixing
-            FULL_IMAGE_PATH="$IMAGE"
-            if [[ "$IMAGE" != "$REGISTRY"* ]]; then
-               FULL_IMAGE_PATH="$REGISTRY/$IMAGE"
-            fi
-
-            echo "Checking tags for $FULL_IMAGE_PATH..."
+            echo "🔍 Checking tags for $REGISTRY/$IMAGE..."
             
-            # 4. Fetch tags - capture error so one bad image doesn't kill the loop
-            RAW_TAGS=$(skopeo list-tags "docker://$FULL_IMAGE_PATH" 2>/dev/null || echo '{"Tags":[]}')
-            
-            LATEST_TAG=$(echo "$RAW_TAGS" | jq -r '.Tags[]' | \
+            # 3. Fetch tags from Iron Bank
+            # Iron Bank tags often look like 16.6.0 or 16.6.0-20240101
+            # We sort to find the highest semantic version
+            LATEST_TAG=$(skopeo list-tags "docker://$REGISTRY/$IMAGE" | jq -r '.Tags[]' | \
               grep -E '^[0-9.]+$' | sort -V | tail -n 1)
 
             if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
-              echo "✅ Found: $LATEST_TAG. Updating $IMAGE in $YAML_FILE"
-              # Use double quotes carefully for yq
-              yq eval "(.[] | select(has(\"$IMAGE\"))).\"$IMAGE\"[0] = \"$LATEST_TAG\"" -i "$YAML_FILE"
+              echo "✅ Found latest: $LATEST_TAG"
+              
+              # 4. Update the regex value in the YAML
+              # We format the tag back into the regex style: ^VERSION$
+              NEW_VALUE="^${LATEST_TAG}$"
+              
+              yq eval ".[\"registry1.dso.mil\"][\"images-by-tag-regex\"].\"$IMAGE\" = \"$NEW_VALUE\"" -i "$YAML_FILE"
             else
               echo "⚠️ No numeric tags found for $IMAGE"
             fi
