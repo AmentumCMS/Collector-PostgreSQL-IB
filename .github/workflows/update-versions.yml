@@ -29,28 +29,31 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           REGISTRY: ${{ vars.REGISTRY }}
         run: |
-          # 1. Login to Registry (The missing piece!)
-          echo "Logging into $REGISTRY..."
+          # 1. Login
           skopeo login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
 
-          # 2. Get image list from YAML
-          # Adjusting yq syntax to handle various list formats
-          IMAGES=$(yq eval '.[] | keys | .[]' "$YAML_FILE")
+          # 2. Get images, but FILTER OUT configuration keys like 'images-by-tag-regex'
+          IMAGES=$(yq eval '.[] | keys | .[]' "$YAML_FILE" | grep -v "images-by-tag-regex")
 
           for IMAGE in $IMAGES; do
-            echo "Checking tags for $IMAGE..."
+            # 3. Ensure the IMAGE string includes the registry prefix
+            # Skopeo needs the full path to know WHICH registry to ask for tags
+            FULL_IMAGE_PATH="$IMAGE"
+            if [[ "$IMAGE" != "$REGISTRY"* ]]; then
+               FULL_IMAGE_PATH="$REGISTRY/$IMAGE"
+            fi
+
+            echo "Checking tags for $FULL_IMAGE_PATH..."
             
-            # 3. Fetch tags (Now with credentials stored in default auth file)
-            # We use --tls-verify=false if your environment requires it
-            LATEST_TAG=$(skopeo list-tags docker://$IMAGE | jq -r '.Tags[]' | \
+            # 4. Fetch tags
+            LATEST_TAG=$(skopeo list-tags "docker://$FULL_IMAGE_PATH" | jq -r '.Tags[]' | \
               grep -E '^[0-9.]+$' | sort -V | tail -n 1)
 
             if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
-              echo "Found latest version: $LATEST_TAG. Updating $YAML_FILE..."
-              # Update the tag in the YAML file
+              echo "✅ Found: $LATEST_TAG. Updating..."
               yq eval "(.[] | select(has(\"$IMAGE\"))).\"$IMAGE\"[0] = \"$LATEST_TAG\"" -i "$YAML_FILE"
             else
-              echo "No numeric tags found for $IMAGE, skipping..."
+              echo "⚠️ No numeric tags found for $IMAGE"
             fi
           done
 
