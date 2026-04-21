@@ -1,0 +1,61 @@
+name: Update Container Versions
+on:
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  update-yaml:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo jq
+          # Download yq
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Update YAML tags
+        env:
+          YAML_FILE: "${{ vars.COLLECTOR }}.yml"
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          # 1. Login to Registry
+          skopeo login ${{ vars.REGISTRY }} -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
+
+          # 2. Iterate through images in the YAML (assuming standard skopeo sync format)
+          # This logic finds tags and updates them to the latest version that isn't 'latest'
+          
+          IMAGES=$(yq eval '.[] | keys | .[]' "$YAML_FILE")
+
+          for IMAGE in $IMAGES; do
+            echo "Checking for latest tag of $IMAGE..."
+            
+            # Fetch all tags using skopeo
+            LATEST_TAG=$(skopeo list-tags docker://$IMAGE | jq -r '.Tags[]' | \
+              grep -E '^[0-9.]+$' | sort -V | tail -n 1)
+
+            if [ -n "$LATEST_TAG" ]; then
+              echo "Updating $IMAGE to $LATEST_TAG"
+              # Update the YAML file specifically for that image entry
+              yq eval "(.[] | select(has(\"$IMAGE\"))).\"$IMAGE\"[0] = \"$LATEST_TAG\"" -i "$YAML_FILE"
+            fi
+          done
+
+      - name: Commit and Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ vars.COLLECTOR }}.yml"
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update container versions in ${{ vars.COLLECTOR }}.yml"
+            git push
+          fi
