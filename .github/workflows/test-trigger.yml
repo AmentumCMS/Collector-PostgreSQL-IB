@@ -23,4 +23,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "Attempting to trigger 'Update Container Versions' on branch 'update-yaml-workflow'..."
-          gh workflow run "Update Container Versions" --ref update-yaml-workflow
+          # gh workflow run "Update Container Versions" --ref update-yaml-workflow
+          gh workflow run update-versions.yml --ref update-yaml-workflow
