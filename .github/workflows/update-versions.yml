@@ -1,5 +1,8 @@
 name: Update Container Versions
 on:
+  push:
+    branches:
+      - update-yaml-workflow
   workflow_dispatch: # Allows manual trigger
 
 jobs:
