@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - update-yaml-workflow
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   update-yaml:
@@ -19,7 +19,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo jq
-          # Download yq
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
           sudo chmod +x /usr/bin/yq
 
@@ -28,26 +27,30 @@ jobs:
           YAML_FILE: "${{ vars.COLLECTOR }}.yml"
           REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY: ${{ vars.REGISTRY }}
         run: |
-          # 1. Login to Registry
-          skopeo login ${{ vars.REGISTRY }} -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
+          # 1. Login to Registry (The missing piece!)
+          echo "Logging into $REGISTRY..."
+          skopeo login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_TOKEN"
 
-          # 2. Iterate through images in the YAML (assuming standard skopeo sync format)
-          # This logic finds tags and updates them to the latest version that isn't 'latest'
-          
+          # 2. Get image list from YAML
+          # Adjusting yq syntax to handle various list formats
           IMAGES=$(yq eval '.[] | keys | .[]' "$YAML_FILE")
 
           for IMAGE in $IMAGES; do
-            echo "Checking for latest tag of $IMAGE..."
+            echo "Checking tags for $IMAGE..."
             
-            # Fetch all tags using skopeo
+            # 3. Fetch tags (Now with credentials stored in default auth file)
+            # We use --tls-verify=false if your environment requires it
             LATEST_TAG=$(skopeo list-tags docker://$IMAGE | jq -r '.Tags[]' | \
               grep -E '^[0-9.]+$' | sort -V | tail -n 1)
 
-            if [ -n "$LATEST_TAG" ]; then
-              echo "Updating $IMAGE to $LATEST_TAG"
-              # Update the YAML file specifically for that image entry
+            if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
+              echo "Found latest version: $LATEST_TAG. Updating $YAML_FILE..."
+              # Update the tag in the YAML file
               yq eval "(.[] | select(has(\"$IMAGE\"))).\"$IMAGE\"[0] = \"$LATEST_TAG\"" -i "$YAML_FILE"
+            else
+              echo "No numeric tags found for $IMAGE, skipping..."
             fi
           done
 
