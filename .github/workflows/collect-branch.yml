@@ -95,7 +95,138 @@ jobs:
           name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
           path: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz*
           if-no-files-found: error
+          
+  AnchoreScan:
+    needs: [Date, Skopeo]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
 
+      - name: Download Skopeo Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          path: .
+
+      - name: Extract for scanning
+        run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+
+      # Anchore Grype is excellent at auto-detecting the skopeo directory structure
+      - name: Run Anchore Grype scan
+        uses: anchore/scan-action@v6
+        id: scan
+        with:
+          path: "${{ vars.COLLECTOR }}"
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+
+      - name: Upload Anchore Scan Report (Security Tab)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+      
+      - name: Generate Anchore Proof Report
+        if: always()
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b .
+          ./grype ./${{ vars.COLLECTOR }} > anchore-report.txt
+          echo "## Anchore Grype Results ⚓" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat anchore-report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Anchore Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-anchore-report
+          path: anchore-report.txt
+
+  TrivyScan:
+    needs: [Date, Skopeo, Code]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write 
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Download Skopeo Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+          path: .
+
+      - name: Extract for scanning
+        run: tar -xzf ${{ vars.COLLECTOR }}-${{ needs.Date.outputs.Date }}.tgz
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.50.0
+      # Fixed: Point Trivy at the specific image directories found by Skopeo
+      - name: Run Trivy FS scan on synced images
+        run: |
+          echo "## Trivy Detailed Findings 🛡️" > trivy-report.txt
+          
+          # We scan each directory found by skopeo as a filesystem.
+          # This allows Trivy to find the 'var/lib/dpkg' or 'apk/db' inside the blobs.
+          for img in $(find ${{ vars.COLLECTOR }} -maxdepth 1 -mindepth 1 -type d ! -name "helmchart"); do
+            echo -e "\n### Scanning Image: $img" >> trivy-report.txt
+            # Using the 'fs' scanner on the directory is the most reliable for skopeo-dir format
+            trivy fs --severity CRITICAL,HIGH --format table "$img" >> trivy-report.txt
+          done
+
+          # Push to the GitHub Summary page
+          echo "## Trivy OCI & Config Results 🛡️" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat trivy-report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Trivy Config Scan (Helm Charts)
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '${{ vars.COLLECTOR }}/helmchart'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+      # Generate SARIF for the Security Tab (scanning the root for config/secrets)
+      - name: Generate SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Publish Trivy Summary
+        if: always()
+        run: |
+          echo "## Trivy OCI & Config Results 🛡️" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat trivy-report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Trivy Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-trivy-report
+          path: trivy-report.txt
   Code:
     needs: [Date]
     runs-on: ubuntu-latest
@@ -451,7 +582,7 @@ jobs:
 
   MakeISO:
     runs-on: ubuntu-latest
-    needs: [Date, Code, Skopeo]
+    needs: [Date, Code, Skopeo, TrivyScan, AnchoreScan]
     env:
       GH_TOKEN: ${{ github.token }}
     permissions:
