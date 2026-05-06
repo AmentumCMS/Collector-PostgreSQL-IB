@@ -1,6 +1,6 @@
 registry1.dso.mil:
   images-by-tag-regex:
     ironbank/opensource/postgres/postgresql: ^18.3$
-    ironbank/bitnami/postgres: ^17.4.0$
-    ironbank/bitnami/postgresql-repmgr: ^17.5.0$
-    ironbank/bitnami/pgpool: ^4.6.2$
+    # ironbank/bitnami/postgres: ^17.4.0$
+    # ironbank/bitnami/postgresql-repmgr: ^17.5.0$
+    # ironbank/bitnami/pgpool: ^4.6.2$

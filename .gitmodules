@@ -1,15 +1,6 @@
-[submodule "bitnami-postgresql16-ib-source"]
-	path = bitnami-postgresql16-ib-source
-	url = https://repo1.dso.mil/dsop/bitnami/postgres/postgresql16
 [submodule "postgresql15-ib-source"]
 	path = postgresql15-ib-source
 	url = https://repo1.dso.mil/dsop/opensource/postgres/postgresql-15/postgresql15.git
-[submodule "bitnami-postgresql-repmgr-source"]
-	path = bitnami-postgresql-repmgr-source
-	url = https://repo1.dso.mil/dsop/bitnami/postgresql-repmgr.git
 [submodule "postgresql15-alpine-source"]
 	path = postgresql15-ib-alpine-source
 	url = https://repo1.dso.mil/dsop/opensource/postgres/postgresql-15/postgresql15-alpine.git
-[submodule "bitnami-pgpool-ib-source"]
-	path = bitnami-pgpool-ib-source
-	url = https://repo1.dso.mil/dsop/bitnami/pgpool.git
